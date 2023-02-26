@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Blank HTML5</title>
+    <style>
+        body {
+            font-family: "Lexend Deca", sans-serif
+        }
+
+        .settingLabel {
+            width: 220px;
+            display: inline-block;
+        }
+
+        #settings {
+            display: none;
+            padding: 20px;
+            background-color: lightgray;
+            font-size: small;
+        }
+
+        #loadQuestionnaire {
+            width: 100px;
+        }
+
+        #checkAnswers {
+            width: 100px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <p>Question Loader</p>
+    <p id="messages" style="font-size: small; color:blue;"></p>
+
+    <div id="settings">
+        <span class="settingLabel">Random / Range:</span>
+        <select id="setting_selectType">
+            <option value="random">Random</option>
+            <option value="range">Range</option>
+        </select> <br />
+        <span class="settingLabel">From index (ex from 0): </span><input type="number" value="0"
+            id="setting_fromIndex" /> <br />
+        <span class="settingLabel">To index (ex from end -1): </span><input type="number" value="100"
+            id="setting_toIndex" /> <br />
+        <input type="button" value="load" onclick="startQuestionnaire()" id="loadQuestionnaire" /> <br />
+        <input type="button" id="checkAnswers" value="check answers" onclick="checkResponses()"
+            style="display: none;" />
+        <div id="questionnaireResult"></div>
+    </div>
+
+    <div id="questionnaire">
+
+    </div>
+
+
+
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script>
+
+        var questions = [];
+        var questionnaire_questions = [];
+        $(document).ready(function () {
+
+            // load questions from json
+            $("#messages").text("Loading 'questions.json'... the file should be in the main directory...");
+            $.getJSON("questions.json", function (data) {
+
+                questions = data;
+                console.log(questions);
+                $("#messages").text(questions.length + " questions loaded!");
+                $("#settings").show();
+
+            }).fail(function () {
+                $("#messages").text("Error loading 'questions.json'.");
+            });
+
+            $(this).keydown(function (e) {
+                if (e.which == 13) {
+                    startQuestionnaire();
+                }
+            });
+
+        });
+
+        function getQuestions(useRandom, fromIndex, toIndex) {
+
+            var localArray = [];
+            fromIndex = parseInt(fromIndex);
+            toIndex = parseInt(toIndex);
+            
+            for (let idx = fromIndex; idx < toIndex; idx++) {
+                console.log(idx);
+                var item = { ...questions[idx] };
+                localArray.push(item);
+            }
+
+            if (useRandom) {
+                localArray = localArray.sort(function (a, b) {
+                    return Math.random() - 0.5;
+                });
+            }
+
+            return localArray;
+        }
+
+        function startQuestionnaire() {
+
+            var useRandom = $('#setting_selectType').find(":selected").val() == "random";
+            var fromIndex = $('#setting_fromIndex').val();
+            var toIndex = $('#setting_toIndex').val();
+
+            if (fromIndex < 0) {
+                fromIndex = 0;
+                $('#setting_fromIndex').val("0");
+            }
+            if (toIndex >= questions.length) {
+                toIndex = questions.length - 1;
+                $('#setting_fromIndex').val(toIndex);
+            }
+
+            console.log("start questionnaire! ");
+            console.log("use random: " + useRandom);
+            console.log("fromIndex: " + fromIndex);
+            console.log("toIndex: " + toIndex);
+
+            $('#questionnaire').empty();
+            $("#checkAnswers").show();
+            $("#questionnaireResult").hide();
+
+            questionnaire_questions = getQuestions(useRandom, fromIndex, toIndex);
+
+            console.log(questionnaire_questions);
+
+            for (var i = 0; i < questionnaire_questions.length; i++) {
+
+                var question = questionnaire_questions[i];
+                var divQuestion = $(document.createElement('div')).css({ padding: '20px', width: 'auto' });
+                divQuestion.append(i + ") " + question.QuestionText);
+
+                if (question.Responses) {
+                    for (var j = 0; j < question.Responses.length; j++) {
+                        var divResponse = $(document.createElement('div')).css({ padding: '5px', width: 'auto' });
+                        divResponse.append("<input type=\"radio\" id=\"q" + i + "_r" + j + "\" name=\"q" + i + "\" value=\"q" + i + "_r" + j + "\"><span onclick=\"selectResponse('q" + i + "_r" + j + "')\">" +
+                            question.Responses[j].ResponseText + "</span>");
+
+                        divQuestion.append(divResponse);
+                    }
+                }
+
+                $("#questionnaire").append(divQuestion);
+            }
+        }
+
+        function selectResponse(responseId) {
+            $("#" + responseId).click();
+        }
+
+        function checkResponses(responseId) {
+            $("#checkAnswers").hide();
+
+            var okCount = 0;
+            for (var i = 0; i < questionnaire_questions.length; i++) {
+
+                var question = questionnaire_questions[i];
+                for (var j = 0; j < question.Responses.length; j++) {
+
+                    var response = question.Responses[j];
+                    var check = $("#q" + i + "_r" + j);
+                    var isChecked = check.is(':checked')
+
+                    if (response.IsRight && !isChecked) {
+                        var divCheck = $(document.createElement('span')).css({ padding: '2px', color: 'blue' });
+                        divCheck.append("this should be checked");
+                        divCheck.insertAfter(check);
+                    }
+                    if (response.IsRight && isChecked) {
+                        var divCheck = $(document.createElement('span')).css({ padding: '2px', color: 'green' });
+                        divCheck.append("ok!");
+                        divCheck.insertAfter(check);
+                        okCount++;
+                    }
+                    if (!response.IsRight && isChecked) {
+                        var divCheck = $(document.createElement('span')).css({ padding: '2px', color: 'red' });
+                        divCheck.append("wrong");
+                        divCheck.insertAfter(check);
+                    }
+                }
+            }
+
+            $("#questionnaireResult").empty();
+            $("#questionnaireResult").show();
+
+            var resultPercentage = okCount / questionnaire_questions.length;
+            var resultColor = "red";
+            if (resultPercentage > 0.8) {
+                resultColor = "green";
+            }
+            var divResult = $(document.createElement('span')).css({ padding: '2px', color: resultColor });
+            divResult.append("<br /><span>" + okCount + " right answer over " + questionnaire_questions.length + "</span>");
+            $("#questionnaireResult").append(divResult);
+        }
+    </script>
+</body>
+
+</html>
